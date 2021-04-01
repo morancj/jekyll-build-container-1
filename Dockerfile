@@ -1,8 +1,8 @@
 # Core tools for building Linaro's static web sites.
 
-# Set the base image to Ubuntu (version 18.04).
+# Set the base image to Ubuntu (version 20.04).
 # Uses the new "ubuntu-minimal" image.
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 LABEL maintainer="it-services@linaro.org"
 
@@ -76,7 +76,7 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
 # This is the last layer which will update Ubuntu packages.
 
 ENV VERSIONED_PACKAGES \
- ruby2.5-dev
+ ruby-dev
 LABEL org.linaro.versioned=${VERSIONED_PACKAGES}
 
 RUN export DEBIAN_FRONTEND=noninteractive && \
@@ -120,33 +120,35 @@ ENV RUBY_GEMS \
  # Used by devicetree.org
  jekyll-minimagick:0.0.4 \
  # Jekyll static site builder
- jekyll:3.8.0 \
- jekyll:4.0.0 \
+ jekyll:3.8.7 \
+ jekyll:4.0.1 \
  # Used by 96boards.org
  jekyll-relative-links:0.6.0 \
  jekyll-relative-links:0.6.1 \
  # Used by connect.linaro.org, linaro.cloud
  jekyll-responsive-image:1.5.2 \
  # Used by 96boards.org
- jekyll-toc:0.12.1 \
+ jekyll-toc:0.15.0 \
  jekyll-readme-index:0.3.0 \
- # Used by all Jekyll sites
- jumbo-jekyll-theme:5.6.9.2 \
  # Used by devicetree.org, op-tee.org
  mini_magick:4.9.3 \
  # Used by connect.linaro.org, linaro.cloud, linaro.org
  nokogiri:1.10.4 \
  # Used by (staging.)lkft.linaro.org
  seriously_simple_static_starter:0.7.0 \
- # Jumbo-jekyll-theme latest version
- jumbo-jekyll-theme:6.0.1.4 \
+ # linaro-jekyll-theme latest versions
+ linaro-jekyll-theme:4.3.3 \
+ linaro-jekyll-theme:4.3.0 \
+ linaro-jekyll-theme:4.2.0 \
+ linaro-jekyll-theme:4.1.6 \
+ linaro-jekyll-theme:4.1.5 \
+ linaro-jekyll-theme:4.1.4 \
+ linaro-jekyll-theme:4.1.3 \
+ linaro-jekyll-theme:4.1.2 \
  closure-compiler \
  # Staged for removal (ensures builds pass)
- jumbo-jekyll-theme:5.6.6 \
- jumbo-jekyll-theme:5.6.5 \
- jumbo-jekyll-theme:6.0.0.1 \
- jumbo-jekyll-theme:6.0.0.4 \
- jumbo-jekyll-theme:6.0.0.5 
+ jumbo-jekyll-theme:6.0.2.1 \
+ jumbo-jekyll-theme:5.6.9.2 
 
 LABEL org.linaro.gems=${RUBY_GEMS}
 

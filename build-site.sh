@@ -48,7 +48,7 @@ get_tag_for_latest() {
 # If possible, show which container version this is
 check_container_version() {
     if [ -n "${BAMBOO_BUILD}" ]; then
-        echo "Container built by bamboo.linaro.org: ${BAMBOO_BUILD}"
+        echo "Container built by GitHub. Build reference: ${BAMBOO_BUILD}"
         get_tag_for_latest || LATEST_ALIAS=""
         if [ -n "$LATEST_ALIAS" ] && [ "$LATEST_ALIAS" != "${BAMBOO_BUILD}" ]; then
             echo "******************************************************************"
@@ -93,9 +93,16 @@ parse_repo_url() {
     # but we need something like https://github.com/96boards/documentation.git so
     # munge things around into the correct format.
     #
+    # If the provided URL doesn't end with ".git", add that first
+    if [[ "$1" == *.git ]]; then
+        INTERIM="$1"
+    else
+        INTERIM="$1.git"
+    fi
+    #
     # Start by seeing if the URL starts with https:. Do this by splitting on the colon
     # as that then helps us if we need to munge anyway.
-    IFS=':' read -ra SPLIT <<< "$1"
+    IFS=':' read -ra SPLIT <<< "$INTERIM"
     #
     # If no colon, we've fouled up somewhere.
     if [ "${#SPLIT[@]}" != "2" ]; then
@@ -104,7 +111,7 @@ parse_repo_url() {
     #
     # If already https then accept that
     if [ "${SPLIT[0]}" == "https" ]; then
-        REPOURL="$1"
+        REPOURL="$INTERIM"
         return
     fi
     REPOURL="https://github.com/${SPLIT[1]}"
@@ -119,6 +126,7 @@ check_repo_url() {
         REPOURL=""
         return
     fi
+    echo "Reading $1 to look for $2"
     # Use awk to:
     # a) find a line that starts with 'remote "'
     # b) then find a line that starts with 'url ='
@@ -131,9 +139,9 @@ check_repo_url() {
     for u in $REPO_URLS
     do
         parse_repo_url "$u"
-        if [ "$REPOURL" == "$2" ]; then
+        echo "REPOURL=$REPOURL"
+        if [ "${REPOURL,,}" == "${2,,}" ]; then
             # Got a match
-            echo "Matched $2"
             return
         fi
     done
@@ -152,10 +160,7 @@ do_rsync() {
     #     is difference from the target. Avoids problems caused by datestamps
     #     not being preserved or clock differences.
     # -r: recurse.
-    # -i: itemise changes. This only happens if the file exists in both the
-    #     source and the destination. Useful for confirming that rsync
-    #     has picked up the desired changes.
-    rsync -cri "${RSYNC_EXCLUDE[@]}" "$1" "$2"
+    rsync -cr "${RSYNC_EXCLUDE[@]}" "$1" "$2"
 }
 
 # If /srv/source contains the files for the repository specified
@@ -166,7 +171,7 @@ check_srv_source() {
         # Not this repo
         return 1
     fi
-    echo "Copying existing repo files into $3"
+    echo "Copying existing $1 repo files into $3"
     # Build the destination path and make sure it exists. Note that
     # the paths read from the manifest file always start with /
     dest_path="/srv/source/merged_sources$3"
@@ -199,14 +204,25 @@ check_srv_varname() {
 # clone directly into $3 because it might not be empty and "git clone"
 # refuses to clone into a non-empty directory.
 clone_missing_repo() {
-    temp_dir=$(mktemp -d)
-    echo "Cloning $2"
-    git clone --quiet "$2" "$temp_dir" || exit 1
-    echo "Copying cloned repo files into $3"
-    dest_path="/srv/source/merged_sources$3"
-    mkdir -p "$dest_path" || exit 1
-    do_rsync "$temp_dir"/ "$dest_path" || exit 1
-    rm -rf "$temp_dir" || exit 1
+    temp_dir=$(mktemp -d -p /srv/source)
+    echo "Cloning $1"
+    git clone --quiet --no-tags --depth=1 "$2" "$temp_dir"
+    result=$?
+    if [ $result -eq 0 ]; then
+        echo "Copying cloned repo files into $3"
+        dest_path="/srv/source/merged_sources$3"
+        mkdir -p "$dest_path"
+        result=$?
+    fi
+    if [ $result -eq 0 ]; then
+        do_rsync "$temp_dir"/ "$dest_path"
+        result=$?
+    fi
+    # Always delete the temp dir
+    rm -rf "$temp_dir"
+    if [ $result -ne 0 ]; then
+        exit 1
+    fi
 }
 
 process_single_repo() {
@@ -241,19 +257,10 @@ process_single_repo() {
 }
 
 process_repos() {
-    # Experimenting with NOT cleaning out the merged_sources directory.
-    # The reason why is because 96Boards does a lot of image resizing
-    # and those images are stored under the "assets" folder in the source
-    # directory that Jekyll is looking at, i.e. the merged_sources directory.
-    # Clearing out the merged_sources directory on every build makes every
-    # subsequent build just as slow as before because all of the images
-    # have to be rebuilt. NOT clearing out the merged_sources directory
-    # allows the previous cache to be re-used.
-    #
-    # # If we already have a "merged_sources" directory, clean it out.
-    # if [ -d "/srv/source/merged_sources" ]; then
-    #     rm -r /srv/source/merged_sources
-    # fi
+    # If we already have a "merged_sources" directory, clean it out.
+    if [ -d "/srv/source/merged_sources" ]; then
+        rm -r /srv/source/merged_sources
+    fi
 
     # Get the possible built site directory names from the manifest and
     # build a rsync exclusion "command". Use an array so that the elements
@@ -268,6 +275,7 @@ process_repos() {
     do
         RSYNC_EXCLUDE+=(--exclude "$d")
     done
+    # echo "debug: RSYNC_EXCLUDE=${RSYNC_EXCLUDE[@]}"
 
     # Iterate through the manifest and process each repo in turn.
     declare -A repo_array
